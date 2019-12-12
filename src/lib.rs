@@ -86,12 +86,13 @@
 use hyper::Body;
 use std::net::IpAddr;
 use std::str::FromStr;
+use hyper_tls::HttpsConnector;
 use hyper::header::{HeaderMap, HeaderValue};
 use hyper::{Request, Response, Client, Uri, StatusCode};
 use futures::future::{self, Future};
 use lazy_static::lazy_static;
 
-type BoxFut = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+type BoxFut = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
 
 fn is_hop_header(name: &str) -> bool {
     use unicase::Ascii;
@@ -174,9 +175,11 @@ fn create_proxied_request<B>(client_ip: IpAddr, forward_url: &str, mut request: 
 
 pub fn call(client_ip: IpAddr, forward_uri: &str, request: Request<Body>) -> BoxFut {
 
-	let proxied_request = create_proxied_request(client_ip, forward_uri, request);
+    let proxied_request = create_proxied_request(client_ip, forward_uri, request);
 
-	let client = Client::new();
+    let https = HttpsConnector::new(4).unwrap();
+    let client = Client::builder().build::<_, Body>(https);
+
 	let response = client.request(proxied_request).then(|response| {
 
 		let proxied_response = match response {
